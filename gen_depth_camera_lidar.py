@@ -287,92 +287,83 @@ def gen_depth(file_name_lidar):
     undist_imgrgb = undistort_image(imgrgb, cam_name) # 数据集去畸变后的 rgb 图片
     
     # ------------------------------------------------------------------------------ #
-    # 可视化 img
-    os.makedirs(f'visualized_results/dist_imgrgb/', exist_ok=True)
-    cv2.imwrite(f'visualized_results/dist_imgrgb/{image_name}', imgrgb)
-    os.makedirs(f'visualized_results/undist_imgrgb/', exist_ok=True)
-    cv2.imwrite(f'visualized_results/undist_imgrgb/{image_name}', undist_imgrgb)
-    # ------------------------------------------------------------------------------ #
+    # 以下代码进行可视化, 查看结果
     
-    # ------------------------------------------------------------------------------ #
-    # 基于 a2d2 的 depth 可视化方法
-    mapped_img = map_lidar_points_onto_image(undist_imgrgb, lidar, 3)
-    os.makedirs(f'visualized_results/scat_points_in_a2d2_method/', exist_ok=True)
-    cv2.imwrite(f'visualized_results/scat_points_in_a2d2_method/{image_name}', mapped_img)
-    # ------------------------------------------------------------------------------ #
+    # # 1. 可视化原始 img 和 去畸变后的 rgb 图片
+    # os.makedirs(f'visualized_results/dist_imgrgb/', exist_ok=True)
+    # cv2.imwrite(f'visualized_results/dist_imgrgb/{image_name}', imgrgb)
+    # os.makedirs(f'visualized_results/undist_imgrgb/', exist_ok=True)
+    # cv2.imwrite(f'visualized_results/undist_imgrgb/{image_name}', undist_imgrgb)
     
-    # ------------------------------------------------------------------------------ #
-    # 基于 mmdet3d 的 depth 可视化方法
-    rows = (lidar['pcloud_attr.row'] + 0.5).astype(np.int32)
-    cols = (lidar['pcloud_attr.col'] + 0.5).astype(np.int32)
-    colors = cm.jet(lidar['pcloud_attr.depth'] / lidar['pcloud_attr.depth'].max())
-    fig, ax = plt.subplots(1, 1, figsize=(20, 20))
-    fig.tight_layout()
-    ax.axis('off')
-    undist_imgrgb_plt = cv2.cvtColor(undist_imgrgb, cv2.COLOR_BGR2RGB) # matplotlib 解析 rgb 方式不一样, 需要转换
-    ax.imshow(undist_imgrgb_plt)
-    ax.scatter(cols, rows, c=colors, s=3)
-    print('min depth: ' + str(lidar['pcloud_attr.depth'].min()) + ', max depth: ' + str(lidar['pcloud_attr.depth'].max()))
-    os.makedirs(f'visualized_results/scat_points_in_mmdet3d_method/', exist_ok=True)
-    plt.savefig(f'visualized_results/scat_points_in_mmdet3d_method/{image_name}', bbox_inches='tight',pad_inches = 0)
-    # ------------------------------------------------------------------------------ #
-
-    # ------------------------------------------------------------------------------ #
-    # lidar view 的 lidar['pcloud_points'], camera view 的 lidar['pcloud_points'] 和 projected points 可视化
+    # # 2. 基于 a2d2 的 lidar.distance 可视化方法
+    # mapped_img = map_lidar_points_onto_image(undist_imgrgb, lidar, 3)
+    # os.makedirs(f'visualized_results/scat_points_in_a2d2_method/', exist_ok=True)
+    # cv2.imwrite(f'visualized_results/scat_points_in_a2d2_method/{image_name}', mapped_img)
     
-    # 1. lidar view 的激光雷达点云可视化
-    pcloud_points_name = file_name_lidar.split('/')[7].replace('npz', 'ply') # 保存 lidar 点云的文件名, 用于在 meshlab 可视化
-    lidar_view_pcloud_points = lidar['pcloud_points']
-    os.makedirs(f'visualized_results/lidar_view_pcloud_points/', exist_ok=True)
-    create_output(lidar_view_pcloud_points, np.ones_like(lidar_view_pcloud_points) * 255, f'visualized_results/lidar_view_pcloud_points/{pcloud_points_name}')
-    
-    # 2.  camera view 的激光雷达点云可视化
-    lidar_view = config['lidars'][f'{view_name}']['view'] # 当前视角的激光雷达视图
-    camera_view = config['cameras'][f'{view_name}']['view'] # 当前视角的相机视图
-    lidar_to_camara_transform = transform_from_to(lidar_view, camera_view) # 激光雷达视角转相机视角转换矩阵
-    ones = np.ones((lidar_view_pcloud_points.shape[0], 1)) 
-    homo_lidar_view_pcloud_points = np.concatenate((lidar_view_pcloud_points, ones), axis=1) # 激光雷达坐标系下的坐标转齐次坐标 (x,y,z) -> (x,y,z,1)
-    camera_view_pcloud_points = (lidar_to_camara_transform @ homo_lidar_view_pcloud_points.T).T[..., :3] # 相机坐标系下的点云坐标
-    os.makedirs(f'visualized_results/camera_view_pcloud_points/', exist_ok=True)
-    create_output(camera_view_pcloud_points , np.ones_like(camera_view_pcloud_points) * 255, f'visualized_results/camera_view_pcloud_points/{pcloud_points_name}')
-
-    # 3. projected points 可视化
-    projected_points = np.dstack((camera_view_pcloud_points[..., 0], camera_view_pcloud_points[..., 1], lidar['pcloud_attr.depth'])).squeeze()
-    os.makedirs(f'visualized_results/projected_points/', exist_ok=True)
-    create_output(projected_points , np.ones_like(projected_points) * 255, f'visualized_results/projected_points/{pcloud_points_name}')
-    # ------------------------------------------------------------------------------ #
-    
-    # ------------------------------------------------------------------------------ #
-    # 保存 depth 
-    # 全 0 背景 + 点云深度 + scale 200 倍 + 300 米以上做截断
+    # # 3. 基于 mmdet3d 的 lidar.depth 可视化方法
     # rows = (lidar['pcloud_attr.row'] + 0.5).astype(np.int32)
     # cols = (lidar['pcloud_attr.col'] + 0.5).astype(np.int32)
-    # z_depth = lidar['pcloud_attr.depth']
-    # h, w = imgrgb.shape[0], imgrgb.shape[1]
-    # depth = np.zeros((h, w))
-    # depth[rows, cols] = z_depth
-    # depth *= 200.
-    # depth[np.where(depth > 200. * 300.)] = 0
-    # os.makedirs(depth_path.split(image_name)[0], exist_ok=True)
-    # mmcv.imwrite(depth.astype(np.uint16), depth_path)
-    # ------------------------------------------------------------------------------ #
-   
-    # ------------------------------------------------------------------------------ #
-    # 读取保存在文件中的 depth 进行可视化
-    # depth_load =  cv2.imread(depth_path, -1)
-    # rows= np.where(depth_load > 0)[1]
-    # cols= np.where(depth_load > 0)[0]
-    # colors = cm.jet(depth_load / np.max(depth_load))[np.where(depth_load > 0)]
+    # colors = cm.jet(lidar['pcloud_attr.depth'] / lidar['pcloud_attr.depth'].max())
     # fig, ax = plt.subplots(1, 1, figsize=(20, 20))
     # fig.tight_layout()
     # ax.axis('off')
-    # ax.imshow(undist_imgrgb)
-    # ax.scatter(rows, cols, color=colors, s=3)
-    # print('min depth: ' + str(depth_load.min()) + ', max depth: ' + str(depth_load.max()))
+    # undist_imgrgb_plt = cv2.cvtColor(undist_imgrgb, cv2.COLOR_BGR2RGB) # matplotlib 解析 rgb 方式不一样, 需要转换
+    # ax.imshow(undist_imgrgb_plt)
+    # ax.scatter(cols, rows, c=colors, s=3)
+    # os.makedirs(f'visualized_results/scat_points_in_mmdet3d_method/', exist_ok=True)
+    # plt.savefig(f'visualized_results/scat_points_in_mmdet3d_method/{image_name}', bbox_inches='tight',pad_inches = 0)
+    
+    # 4. camera view 的激光雷达点云可视化
+    # pcloud_points_name = file_name_lidar.split('/')[7].replace('npz', 'ply') # 保存 lidar 点云的文件名, 用于在 meshlab 可视化
+    # pcloud_points = lidar['pcloud_points'] # 相机坐标系下的点云坐标  [..., 0]: depth 方向, 正向从近到远; [..., 1]: 水平方向, 正向从右到左; [..., 2]: 竖直方向, 正向从下到上
+    # os.makedirs(f'visualized_results/pcloud_points/', exist_ok=True)
+    # create_output(pcloud_points, np.ones_like(pcloud_points) * 255, f'visualized_results/pcloud_points/{pcloud_points_name}')
+
+    # 7. 读取保存在文件中的 depth 进行可视化
+    # depth_load =  cv2.imread(depth_path, -1)
+    # rows= np.where(depth_load > 0)[0] # 行 
+    # cols= np.where(depth_load > 0)[1] # 列
+    # rows = (lidar['pcloud_attr.row'] + 0.5).astype(np.int32)
+    # cols = (lidar['pcloud_attr.col'] + 0.5).astype(np.int32)
+    # depth_valid = depth_load[rows, cols] / 200
+    # colors = cm.jet(depth_valid / np.max(depth_valid))
+    # fig, ax = plt.subplots(1, 1, figsize=(20, 20))
+    # fig.tight_layout()
+    # ax.axis('off')
+    # undist_imgrgb_plt = cv2.cvtColor(undist_imgrgb, cv2.COLOR_BGR2RGB) # matplotlib 解析 rgb 方式不一样, 需要转换
+    # ax.imshow(undist_imgrgb_plt)
+    # ax.scatter(cols, rows, color=colors, s=3)
     # os.makedirs(f'visualized_results/scat_points_loaded_from_file/', exist_ok=True)
     # plt.savefig(f'visualized_results/scat_points_loaded_from_file/{image_name}', bbox_inches='tight',pad_inches = 0)
+    # points = np.vstack((pcloud_points[..., 1], pcloud_points[..., 2], depth_valid)).T
+    # os.makedirs(f'visualized_results/loaded_camera_view_pcloud_points/', exist_ok=True)
+    # create_output(points , np.ones_like(points) * 255, f'visualized_results/loaded_camera_view_pcloud_points/{pcloud_points_name}')
+
+    # # 8.  global view 的激光雷达点云可视化
+    # camera_view = config['cameras'][f'{view_name}']['view'] # 当前视角的相机视图
+    # camera_to_global_transform = get_transform_to_global(camera_view) # 相机视角转全局视角
+    # ones = np.ones((pcloud_points.shape[0], 1)) 
+    # homo_lidar_view_pcloud_points = np.concatenate((pcloud_points, ones), axis=1) # 激光雷达坐标系下的坐标转齐次坐标 (x,y,z) -> (x,y,z,1)
+    # global_view_pcloud_points = (camera_to_global_transform @ homo_lidar_view_pcloud_points.T).T[..., :3] # 相机坐标系下的点云坐标 [..., 0]: 水平方向, 正向从右到左; [..., 1]: depth 方向, 正向从远到近; [..., 2]: 竖直方向, 正向从下到上
+    # os.makedirs(f'visualized_results/global_view_pcloud_points/', exist_ok=True)
+    # create_output(global_view_pcloud_points , np.ones_like(global_view_pcloud_points) * 255, f'visualized_results/global_view_pcloud_points/{pcloud_points_name}')
     # ------------------------------------------------------------------------------ #
-    
+
+    # ------------------------------------------------------------------------------ #
+    # 保存相机坐标系下的 z-depth 
+    # 全 0 背景 + 点云深度 + scale 200 倍 + 300 米以上做截断
+    rows = (lidar['pcloud_attr.row'] + 0.5).astype(np.int32) # 根据 map_lidar_points_onto_image 方法确定的像素坐标系的 width 坐标
+    cols = (lidar['pcloud_attr.col'] + 0.5).astype(np.int32) # 根据 map_lidar_points_onto_image 方法确定的像素坐标系的 height 坐标
+    z_depth = lidar['pcloud_attr.depth'] # 相机坐标系下的 z-深度
+    h, w = undist_imgrgb.shape[0], undist_imgrgb.shape[1]
+    depth = np.zeros((h, w))
+    depth[rows, cols] = z_depth
+    depth *= 200.
+    depth[np.where(depth > 200. * 300.)] = 0
+    os.makedirs(depth_path.split(image_name)[0], exist_ok=True)
+    mmcv.imwrite(depth.astype(np.uint16), depth_path)
+   
+       
 
 if __name__ == '__main__':
     root_path = '/data/a2d2/camera_lidar/'
@@ -384,8 +375,8 @@ if __name__ == '__main__':
     # get the list of files in lidar directory
     """
     - 根据 lidar 的文件名列表确定需要转换 depth 的列表
-    - 每次需要访问磁盘获取 lidar 的文件名列表
-    - 为了提高效率, 可以将获取到的列表存到文件中
+    - 每次需要访问磁盘遍历文件夹获取 lidar 的文件名列表, 比较耗时
+    - 为了提高效率, 可以将获取到的列表保存到文件中
     - 每次转换直接读取文件即可
     - camera_lidar_filenames.json: 保存 root_path 下所有 lidar 的文件名
     """
@@ -397,6 +388,42 @@ if __name__ == '__main__':
     # 多线程方法
     # mmcv.track_parallel_progress(gen_depth,lidar_file_names, 64)
 
-    # 测试用
-    for file_name_lidar in lidar_file_names[0:30000:5000]:
-        gen_depth(file_name_lidar)
+    # 以下测试用
+    # for file_name_lidar in lidar_file_names[100000:390000:50000]:
+    #     gen_depth(file_name_lidar)
+    
+    # 可视化两组环视的 lidar 数据
+    # lidar_file_names = ['/data/a2d2/camera_lidar/20190401_121727/lidar/cam_front_left/20190401121727_lidar_frontleft_000023526.npz',
+    #                     '/data/a2d2/camera_lidar/20190401_121727/lidar/cam_front_right/20190401121727_lidar_frontright_000023526.npz',
+    #                     '/data/a2d2/camera_lidar/20190401_121727/lidar/cam_front_center/20190401121727_lidar_frontcenter_000023526.npz',
+    #                     '/data/a2d2/camera_lidar/20190401_121727/lidar/cam_side_left/20190401121727_lidar_sideleft_000023526.npz',
+    #                     '/data/a2d2/camera_lidar/20190401_121727/lidar/cam_side_right/20190401121727_lidar_sideright_000023526.npz',
+    #                     '/data/a2d2/camera_lidar/20190401_121727/lidar/cam_rear_center/20190401121727_lidar_rearcenter_000023526.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_left/20180810150607_lidar_frontleft_000000160.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_right/20180810150607_lidar_frontright_000000160.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000000160.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_side_left/20180810150607_lidar_sideleft_000000160.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_side_right/20180810150607_lidar_sideright_000000160.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_rear_center/20180810150607_lidar_rearcenter_000000160.npz'
+    #                     ]
+    # for file_name_lidar in lidar_file_names:
+    #     gen_depth(file_name_lidar)
+
+    # 二次校对时不小心用新方法导出的 depth 覆盖的文件列表, 这里用原方法还原回去
+    # lidar_file_names = ['/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_right/20180810150607_lidar_frontright_000008684.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_right/20180810150607_lidar_frontright_000012684.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_left/20180810150607_lidar_frontleft_000009372.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_left/20180810150607_lidar_frontleft_000000372.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_left/20180810150607_lidar_frontleft_000004372.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_left/20180810150607_lidar_frontleft_000008372.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_left/20180810150607_lidar_frontleft_000012372.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000005060.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000010060.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000015060.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000000060.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000004060.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000008060.npz',
+    #                     '/data/a2d2/camera_lidar/20180810_150607/lidar/cam_front_center/20180810150607_lidar_frontcenter_000012060.npz',
+    #                     ]
+    # for file_name_lidar in lidar_file_names:
+    #     gen_depth(file_name_lidar)
