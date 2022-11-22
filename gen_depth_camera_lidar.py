@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 import numpy.linalg as la
+import glob
 
 EPSILON = 1.0e-10 # norm should not be small
 
@@ -374,6 +375,7 @@ if __name__ == '__main__':
 
     # get the list of files in lidar directory
     """
+    - 统计 lidar 路径下的文件列表
     - 根据 lidar 的文件名列表确定需要转换 depth 的列表
     - 每次需要访问磁盘遍历文件夹获取 lidar 的文件名列表, 比较耗时
     - 为了提高效率, 可以将获取到的列表保存到文件中
@@ -385,6 +387,7 @@ if __name__ == '__main__':
     #     json.dump(lidar_file_names, outfile, indent = 4)
     lidar_file_names = json.load(open('camera_lidar_filenames.json', 'r'))
 
+    
     # 多线程方法
     # mmcv.track_parallel_progress(gen_depth,lidar_file_names, 64)
 
@@ -392,6 +395,14 @@ if __name__ == '__main__':
     # for file_name_lidar in lidar_file_names[100000:390000:50000]:
     #     gen_depth(file_name_lidar)
     
+    """
+    - 统计 depth 路径下的文件列表
+    - 以供转 ffrecord dataset 使用
+    """
+    lidar_file_names = sorted(glob.glob(join(root_path, '*/depth/*/*.png')))
+    with open('/data/a2d2/camera_lidar/camera_lidar_depth_filenames.json', 'w') as outfile:
+        json.dump(lidar_file_names, outfile, indent = 4)
+
     # 可视化两组环视的 lidar 数据
     # lidar_file_names = ['/data/a2d2/camera_lidar/20190401_121727/lidar/cam_front_left/20190401121727_lidar_frontleft_000023526.npz',
     #                     '/data/a2d2/camera_lidar/20190401_121727/lidar/cam_front_right/20190401121727_lidar_frontright_000023526.npz',
@@ -427,3 +438,4 @@ if __name__ == '__main__':
     #                     ]
     # for file_name_lidar in lidar_file_names:
     #     gen_depth(file_name_lidar)
+

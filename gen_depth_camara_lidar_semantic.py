@@ -1,3 +1,33 @@
+"""
+负责给 a2d2 Camera Lidar Sensor Fusion 数据集生成 depth 的源码
+
+文件结构: 
+
+A2D2
+├── camera_lidar_semantic
+│   ├── 20180807_145028
+│   │   ├── camera
+│   │   ├── depth
+│   │   ├── label
+│   │   ├── lidar
+│   │   ├── ssiw
+│   │   └── undist_camera
+│   ├── 20180810_142822
+│   │   ├── same as 20180807_145028
+│   ├── ...（共23个序列）
+│   ├── 20181204_170238
+│   │   ├── camera 
+│   │   ├── depth
+│   │   ├── label
+│   │   ├── lidar
+│   │   ├── ssiw
+│   │   └── undist_camera
+│   └── 20181204_191844 (无 lidar)
+│       ├── camera
+│       ├── label
+│       └── ssiw
+"""
+
 import json
 import pprint
 import numpy as np
@@ -216,6 +246,8 @@ if __name__ == '__main__':
     # cam matrix 
     with open ('/data/a2d2/cams_lidars.json', 'r') as f:
         config = json.load(f)
+    
+    # 保存相机内参
     # anno_dict = {}
     # for cam_name in ['front_left', 'front_center', \
     #                 'front_right', 'side_left', \
@@ -230,15 +262,22 @@ if __name__ == '__main__':
     # with open('camera_lidar_semantic_filenames.json', 'w') as outfile:
     #     json.dump(lidar_filenames, outfile, indent = 4)
 
-    class_list = json.load(open('class_list.json', 'r'))
-    color_ints = [int(i[1:],16) for i in class_list.keys()]
+    # class_list = json.load(open('class_list.json', 'r'))
+    # color_ints = [int(i[1:],16) for i in class_list.keys()]
     
     # 多线程方法
-    lidar_file_names = json.load(open('camera_lidar_semantic_filenames.json', 'r'))
-    mmcv.track_parallel_progress(gen_depth,lidar_file_names, 64)
+    # lidar_file_names = json.load(open('camera_lidar_semantic_filenames.json', 'r'))
+    # mmcv.track_parallel_progress(gen_depth,lidar_file_names, 64)
 
     # 测试用
     # for file_name_lidar in lidar_file_names[0:5000:1000]:
     #     gen_depth(file_name_lidar)
-    # gen_depth(lidar_file_names[941])
+    # gen_depth('/data/a2d2/camera_lidar_semantic/20181107_132300/lidar/cam_front_center/20181107132300_lidar_frontcenter_000000050.npz')
     
+    """
+    - 统计 depth 路径下的文件列表
+    - 以供转 ffrecord dataset 使用
+    """
+    lidar_file_names = sorted(glob.glob(join(root_path, '*/depth/*/*.png')))
+    with open('/data/a2d2/camera_lidar_semantic/camera_lidar_semantic_depth_filenames.json', 'w') as outfile:
+        json.dump(lidar_file_names, outfile, indent = 4)
